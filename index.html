@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BeamDrop | Secure P2P</title>
+    <title>BeamDrop 0.8| Instant P2P</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@500&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=JetBrains+Mono:wght@500&display=swap');
 
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #050505;
+            background-color: #030303;
             color: #e2e8f0;
             overflow: hidden;
             user-select: none;
@@ -19,145 +19,109 @@
 
         .mono { font-family: 'JetBrains Mono', monospace; }
 
-        @keyframes radar-sweep {
+        @keyframes sweep {
             from { transform: rotate(0deg); }
             to { transform: rotate(360deg); }
         }
 
-        @keyframes pulse-ring {
-            0% { transform: scale(0.8); opacity: 0.5; }
-            100% { transform: scale(2.2); opacity: 0; }
-        }
-
-        .radar-sweep {
+        .radar-line {
             position: absolute;
-            width: 120vh;
-            height: 120vh;
-            background: conic-gradient(from 0deg, rgba(34, 197, 94, 0.08) 0%, transparent 30%);
+            width: 100vh;
+            height: 100vh;
+            background: conic-gradient(from 0deg, rgba(34, 197, 94, 0.15) 0%, transparent 25%);
             border-radius: 50%;
-            animation: radar-sweep 10s linear infinite;
+            animation: sweep 8s linear infinite;
             pointer-events: none;
         }
 
-        .pulse {
-            position: absolute;
-            border: 1px solid rgba(34, 197, 94, 0.15);
-            border-radius: 50%;
-            animation: pulse-ring 6s infinite cubic-bezier(0.4, 0, 0.6, 1);
-        }
-
-        .peer-card {
-            transition: left 0.8s cubic-bezier(0.34, 1.56, 0.64, 1), top 0.8s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.5s, transform 0.5s;
-            opacity: 0;
-            transform: scale(0.8);
-        }
-
-        .peer-card.visible {
-            opacity: 1;
-            transform: scale(1);
-        }
-
         .glass {
-            background: rgba(10, 10, 10, 0.85);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(15, 15, 15, 0.8);
+            backdrop-filter: blur(25px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .peer-node {
+            transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
         }
 
         #image-preview-container img {
             max-width: 100%;
-            max-height: 35vh;
+            max-height: 40vh;
             object-fit: contain;
-            border-radius: 1rem;
-            box-shadow: 0 0 40px rgba(34, 197, 94, 0.15);
-            border: 1px solid rgba(34, 197, 94, 0.3);
+            border-radius: 12px;
+            box-shadow: 0 0 50px rgba(34, 197, 94, 0.1);
+        }
+
+        .btn-glow:hover {
+            box-shadow: 0 0 20px rgba(34, 197, 94, 0.3);
         }
     </style>
 </head>
 <body class="min-h-screen">
 
-    <!-- Header -->
-    <header class="fixed top-0 w-full z-50 px-8 py-6 flex justify-between items-center glass border-b border-white/5">
-        <div class="flex items-center gap-4">
-            <div id="favicon-container" class="w-10 h-10 flex items-center justify-center"></div>
-            <div>
-                <h1 class="text-xl font-extrabold tracking-tighter leading-none">
-                    BEAM<span class="text-green-500">DROP</span>
-                </h1>
-                <p class="text-[9px] mono text-white/30 uppercase tracking-[0.3em]">Encrypted Node Link</p>
+    <header class="fixed top-0 w-full z-50 px-6 py-4 flex justify-between items-center glass border-b border-white/5">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(34,197,94,0.4)]">
+                <svg class="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </div>
+            <h1 class="text-lg font-black tracking-tighter">BEAM<span class="text-green-500">DROP</span></h1>
         </div>
-        
-        <div class="flex items-center gap-6">
-            <div class="flex flex-col items-end">
-                <button id="change-name-btn" class="text-xs font-semibold hover:text-green-400 transition flex items-center gap-2">
-                    <span id="display-name" class="mono text-green-500">SYNCING...</span>
-                    <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" stroke-width="2"/></svg>
-                </button>
-                <div class="flex items-center gap-1.5 mt-1">
-                    <div id="status-dot" class="w-1.5 h-1.5 rounded-full bg-red-500 transition-all duration-500"></div>
-                    <span id="status-text" class="text-[9px] mono uppercase text-white/20 tracking-widest">Searching...</span>
-                </div>
-            </div>
+        <div class="text-right">
+            <button id="change-name-btn" class="text-xs font-bold text-green-500 hover:text-green-400 block" id="display-name">---</button>
+            <span class="text-[8px] mono text-white/20 tracking-widest uppercase" id="status-text">INITIALIZING...</span>
         </div>
     </header>
 
-    <!-- Overlay UI (Transfer & Preview) -->
-    <div id="transfer-overlay" class="fixed inset-0 z-[60] bg-black/90 backdrop-blur-md hidden items-center justify-center p-6">
-        <div class="glass p-10 rounded-[3rem] w-full max-w-lg border border-green-500/20 text-center shadow-2xl">
-            <div id="image-preview-container" class="mb-6 hidden flex justify-center"></div>
+    <div id="transfer-overlay" class="fixed inset-0 z-[100] bg-black/95 hidden items-center justify-center p-6 backdrop-blur-xl">
+        <div class="glass p-10 rounded-[2.5rem] w-full max-w-md border border-green-500/20 text-center relative overflow-hidden">
+            <div id="image-preview-container" class="mb-6 hidden"></div>
             
-            <h3 id="transfer-title" class="text-xl font-bold mb-2">Processing Beam</h3>
-            <div class="flex flex-col gap-1 mb-8">
-                <p id="transfer-file-name" class="text-sm font-bold text-white/90 truncate px-4">initializing...</p>
-                <p id="transfer-file-info" class="text-[10px] mono text-white/30 uppercase tracking-widest"></p>
-            </div>
+            <h3 id="transfer-title" class="text-xl font-black mb-1">BEAM ACTIVE</h3>
+            <p id="transfer-file-name" class="text-sm font-medium text-white/60 truncate mb-8 px-4">file_stream.data</p>
             
-            <div id="progress-container" class="w-full">
-                <div class="w-full bg-white/5 h-2 rounded-full overflow-hidden mb-4">
-                    <div id="transfer-progress" class="bg-green-500 h-full w-0 transition-all duration-300 ease-out"></div>
+            <div id="progress-area">
+                <div class="w-full bg-white/5 h-1.5 rounded-full overflow-hidden mb-4">
+                    <div id="transfer-progress" class="bg-green-500 h-full w-0 transition-all duration-200"></div>
                 </div>
-                <p id="transfer-percent" class="text-xs mono text-green-500 font-bold">0%</p>
+                <div class="flex justify-between mono text-[10px] text-green-500 font-bold">
+                    <span id="transfer-percent">0%</span>
+                    <span id="transfer-speed">SYNCING...</span>
+                </div>
             </div>
 
-            <div id="action-container" class="hidden flex gap-4 mt-4 w-full">
-                <button id="close-transfer" class="flex-1 py-5 text-[11px] mono font-bold bg-white/5 hover:bg-white/10 rounded-2xl transition tracking-widest border border-white/5">DISMISS</button>
-                <button id="download-btn" class="flex-1 py-5 bg-green-500 hover:bg-green-400 text-black font-black text-[11px] mono rounded-2xl transition tracking-widest shadow-lg shadow-green-500/10">DOWNLOAD</button>
+            <div id="action-area" class="hidden flex flex-col gap-3 mt-4">
+                <button id="download-btn" class="w-full py-5 bg-green-500 hover:bg-green-400 text-black font-black text-sm rounded-2xl transition btn-glow">SAVE TO DEVICE</button>
+                <button id="close-transfer" class="w-full py-4 text-[10px] mono font-bold text-white/30 hover:text-white transition">DISMISS BEAM</button>
             </div>
         </div>
     </div>
 
-    <!-- Main Canvas -->
     <main class="w-full h-screen relative flex items-center justify-center overflow-hidden">
-        <div class="absolute inset-0 opacity-[0.02] pointer-events-none" style="background-image: radial-gradient(#fff 1px, transparent 1px); background-size: 60px 60px;"></div>
-        <div class="pulse" style="width: 40vh; height: 40vh; animation-delay: 0s;"></div>
-        <div class="pulse" style="width: 80vh; height: 80vh; animation-delay: 2s;"></div>
-        <div class="radar-sweep"></div>
-
-        <div class="relative z-10 flex flex-col items-center pointer-events-none">
-            <div class="w-20 h-20 bg-green-500/5 rounded-full border border-green-500/10 flex items-center justify-center animate-pulse">
-                <div class="w-4 h-4 bg-green-500 rounded-full shadow-[0_0_20px_#22c55e]"></div>
-            </div>
-            <div class="mt-6 px-5 py-2 rounded-full bg-green-500/5 border border-green-500/10 text-[10px] mono text-green-500 font-bold tracking-[0.5em] uppercase">
-                Ready for Link
-            </div>
+        <div class="radar-line"></div>
+        <div class="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none">
+            <div class="w-[40vh] h-[40vh] border border-white rounded-full"></div>
+            <div class="w-[70vh] h-[70vh] border border-white rounded-full absolute"></div>
         </div>
 
         <div id="peers-container" class="absolute inset-0 z-20 pointer-events-none"></div>
+        
+        <div class="relative z-10 text-center pointer-events-none">
+            <div class="w-24 h-24 rounded-full border-2 border-green-500/20 flex items-center justify-center animate-pulse">
+                <div class="w-3 h-3 bg-green-500 rounded-full shadow-[0_0_20px_#22c55e]"></div>
+            </div>
+        </div>
     </main>
 
-    <!-- Receive Prompt Modal -->
-    <div id="offer-modal" class="fixed inset-0 bg-black/95 hidden z-[100] flex items-center justify-center p-4 backdrop-blur-2xl">
-        <div class="glass p-10 rounded-[3rem] border border-white/10 max-w-sm w-full text-center shadow-2xl">
-            <div class="w-20 h-20 bg-green-500/10 rounded-3xl flex items-center justify-center mx-auto mb-8 border border-green-500/20">
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-10 h-10 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
+    <div id="offer-modal" class="fixed inset-0 bg-black/90 hidden z-[110] flex items-center justify-center p-4 backdrop-blur-2xl">
+        <div class="glass p-10 rounded-[3rem] border border-white/10 max-w-xs w-full text-center">
+            <div class="w-16 h-16 bg-green-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                <svg class="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </div>
-            <h2 class="text-xl font-bold mb-2">Incoming Beam</h2>
-            <p id="offer-text" class="text-white/40 text-xs mono mb-10 uppercase tracking-widest leading-loose"></p>
-            <div class="flex gap-4">
-                <button id="decline-btn" class="flex-1 py-4 text-[10px] mono font-bold hover:bg-white/5 rounded-2xl transition border border-white/10">IGNORE</button>
-                <button id="accept-btn" class="flex-1 py-4 bg-green-600 hover:bg-green-500 text-black font-black text-[10px] mono rounded-2xl transition">RECEIVE</button>
+            <h2 class="text-lg font-bold mb-1">Incoming Beam</h2>
+            <p id="offer-info" class="text-white/40 text-[10px] mono mb-8 uppercase tracking-widest"></p>
+            <div class="flex gap-3">
+                <button id="decline-btn" class="flex-1 py-4 text-[10px] mono font-bold bg-white/5 rounded-2xl hover:bg-white/10 transition">IGNORE</button>
+                <button id="accept-btn" class="flex-1 py-4 bg-green-500 text-black font-black text-[10px] mono rounded-2xl hover:bg-green-400 transition">ACCEPT</button>
             </div>
         </div>
     </div>
@@ -166,134 +130,92 @@
 
     <script>
         const SERVER_URL = "https://beamdrop-gidy.onrender.com/";
-        const socket = io(SERVER_URL);
+        const socket = io(SERVER_URL, { transports: ['websocket', 'polling'], upgrade: true });
         
         const peersContainer = document.getElementById('peers-container');
-        const displayName = document.getElementById('display-name');
         const fileInput = document.getElementById('file-input');
-        const statusDot = document.getElementById('status-dot');
-        const statusText = document.getElementById('status-text');
         
-        let selectedPeerId = null;
-        let myName = localStorage.getItem('beamdrop_name') || `OPERATOR-${Math.floor(Math.random() * 999)}`;
+        let myName = localStorage.getItem('bd_name') || `NODE-${Math.floor(Math.random() * 9999)}`;
         const myDevice = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ? 'MOBILE' : 'STATION';
-
-        // State variables
+        
         let pc = null;
-        let dataChannel = null;
-        let receivedChunks = [];
-        let incomingMetadata = null;
-        let finalBlob = null;
+        let dc = null;
+        let chunks = [];
+        let meta = null;
+        let activePeer = null;
 
-        displayName.innerText = myName;
+        document.getElementById('change-name-btn').innerText = myName;
 
-        // Visual Utilities
-        function updateFavicon() {
-            const canvas = document.createElement('canvas');
-            canvas.width = 32; canvas.height = 32;
-            const ctx = canvas.getContext('2d');
-            const pulse = 0.5 + Math.abs(Math.sin(Date.now() / 600)) * 0.5;
-            ctx.clearRect(0, 0, 32, 32);
-            ctx.beginPath();
-            ctx.arc(16, 16, 8, 0, Math.PI * 2);
-            ctx.fillStyle = `rgba(34, 197, 94, ${pulse})`;
-            ctx.fill();
-            const link = document.querySelector("link[rel*='icon']") || document.createElement('link');
-            link.rel = 'icon';
-            link.href = canvas.toDataURL();
-            document.head.appendChild(link);
-            document.getElementById('favicon-container').innerHTML = `<div class="w-3 h-3 bg-green-500 rounded-full" style="opacity: ${pulse}"></div>`;
-        }
-        setInterval(updateFavicon, 100);
+        socket.on('connect', () => {
+            document.getElementById('status-text').innerText = "ONLINE";
+            socket.emit('join-network', { name: myName, device: myDevice });
+        });
+
+        socket.on('peers-update', (peers) => {
+            const list = peers.filter(p => p.id !== socket.id);
+            renderPeers(list);
+        });
 
         function renderPeers(peers) {
-            const currentIds = peers.map(p => p.id);
-            Array.from(peersContainer.children).forEach(node => {
-                if (!currentIds.includes(node.dataset.id)) {
-                    node.classList.remove('visible');
-                    setTimeout(() => node.remove(), 600);
-                }
-            });
-
+            peersContainer.innerHTML = '';
             const centerX = window.innerWidth / 2;
             const centerY = window.innerHeight / 2;
             const radius = Math.min(window.innerWidth, window.innerHeight) * 0.35;
 
-            peers.forEach((peer, index) => {
-                let node = Array.from(peersContainer.children).find(n => n.dataset.id === peer.id);
-                const angle = (index / peers.length) * Math.PI * 2 - Math.PI / 2;
+            peers.forEach((peer, i) => {
+                const angle = (i / peers.length) * Math.PI * 2 - Math.PI / 2;
                 const x = centerX + radius * Math.cos(angle);
                 const y = centerY + radius * Math.sin(angle);
 
-                if (!node) {
-                    node = document.createElement('div');
-                    node.dataset.id = peer.id;
-                    node.className = 'peer-card absolute pointer-events-auto cursor-pointer flex flex-col items-center group';
-                    node.innerHTML = `
-                        <div class="relative w-32 h-32 glass rounded-[3rem] flex flex-col items-center justify-center border border-white/5 hover:border-green-500/50 transition-all duration-500 shadow-xl">
-                            <div class="mb-2 text-white/20 group-hover:text-green-500 transition-colors">
-                                 ${peer.device === 'MOBILE' ? 
-                                    '<svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" stroke-width="1.2"/></svg>' : 
-                                    '<svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" stroke-width="1.2"/></svg>'
-                                }
-                            </div>
-                            <span class="text-[10px] font-bold text-white/60 tracking-tighter uppercase px-4 truncate w-full text-center">${peer.name}</span>
-                        </div>
-                    `;
-                    node.onclick = () => { selectedPeerId = peer.id; fileInput.click(); };
-                    peersContainer.appendChild(node);
-                    requestAnimationFrame(() => node.classList.add('visible'));
-                }
-                node.style.left = `${x}px`;
-                node.style.top = `${y}px`;
-                node.style.transform = `translate(-50%, -50%)`;
+                const div = document.createElement('div');
+                div.className = 'peer-node absolute pointer-events-auto cursor-pointer group flex flex-col items-center';
+                div.style.left = `${x}px`;
+                div.style.top = `${y}px`;
+                div.style.transform = 'translate(-50%, -50%)';
+                
+                div.innerHTML = `
+                    <div class="w-24 h-24 glass rounded-3xl flex items-center justify-center border border-white/5 group-hover:border-green-500/50 transition-all duration-300 shadow-xl group-active:scale-90">
+                        <svg class="w-8 h-8 text-white/20 group-hover:text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            ${peer.device === 'MOBILE' ? '<path d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" stroke-width="1.5"/>' : '<path d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" stroke-width="1.5"/>'}
+                        </svg>
+                    </div>
+                    <span class="mt-3 text-[10px] mono font-bold text-white/40 group-hover:text-white uppercase tracking-tighter">${peer.name}</span>
+                `;
+                div.onclick = () => { activePeer = peer.id; fileInput.click(); };
+                peersContainer.appendChild(div);
             });
         }
 
-        // Connection Handlers
-        socket.on('connect', () => {
-            statusDot.className = 'w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_10px_#22c55e]';
-            statusText.innerText = "LINK ESTABLISHED";
-            socket.emit('join-network', { name: myName, device: myDevice });
-        });
-
-        socket.on('peers-update', (p) => renderPeers(p.filter(x => x.id !== socket.id)));
-
-        // Outgoing Logic
-        fileInput.onchange = (e) => {
-            const file = e.target.files[0];
-            if (!file || !selectedPeerId) return;
-            incomingMetadata = { name: file.name, size: file.size, type: file.type };
-            socket.emit('file-offer', { to: selectedPeerId, from: socket.id, metadata: incomingMetadata });
-            displayName.innerText = "REQUESTING...";
+        fileInput.onchange = () => {
+            const file = fileInput.files[0];
+            if (!file) return;
+            meta = { name: file.name, size: file.size, type: file.type };
+            socket.emit('file-offer', { to: activePeer, from: socket.id, metadata: meta });
+            document.getElementById('status-text').innerText = "WAITING...";
         };
 
-        // Incoming Logic
         socket.on('file-offer', ({ from, metadata }) => {
-            selectedPeerId = from;
-            incomingMetadata = metadata;
-            const modal = document.getElementById('offer-modal');
-            modal.classList.remove('hidden');
-            document.getElementById('offer-text').innerText = `${metadata.name}\n${(metadata.size/1024/1024).toFixed(2)} MB`;
+            activePeer = from;
+            meta = metadata;
+            document.getElementById('offer-modal').classList.remove('hidden');
+            document.getElementById('offer-info').innerText = `${metadata.name} | ${(metadata.size/1024/1024).toFixed(1)}MB`;
             
             document.getElementById('accept-btn').onclick = () => {
                 socket.emit('file-accept', { to: from, from: socket.id });
-                modal.classList.add('hidden');
-                initiateRTC(from, false);
+                document.getElementById('offer-modal').classList.add('hidden');
+                setupWebRTC(from, false);
             };
             document.getElementById('decline-btn').onclick = () => {
                 socket.emit('file-decline', { to: from, from: socket.id });
-                modal.classList.add('hidden');
+                document.getElementById('offer-modal').classList.add('hidden');
             };
         });
 
-        socket.on('file-accept', ({ from }) => initiateRTC(from, true));
+        socket.on('file-accept', ({ from }) => setupWebRTC(from, true));
 
-        // WebRTC Core
-        async function initiateRTC(remoteId, isInitiator) {
-            if(pc) pc.close();
-            receivedChunks = [];
-            finalBlob = null;
+        async function setupWebRTC(remoteId, isInitiator) {
+            if (pc) pc.close();
+            chunks = [];
             
             pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
 
@@ -302,13 +224,13 @@
             };
 
             if (isInitiator) {
-                dataChannel = pc.createDataChannel('beamTransfer', { ordered: true });
-                setupChannelEvents(dataChannel);
+                dc = pc.createDataChannel('beamChannel', { ordered: true });
+                handleChannel(dc);
                 const offer = await pc.createOffer();
                 await pc.setLocalDescription(offer);
                 socket.emit('signal', { to: remoteId, signal: { sdp: offer } });
             } else {
-                pc.ondatachannel = (e) => setupChannelEvents(e.channel);
+                pc.ondatachannel = (e) => handleChannel(e.channel);
             }
         }
 
@@ -319,111 +241,90 @@
                 if (pc.remoteDescription.type === 'offer') {
                     const answer = await pc.createAnswer();
                     await pc.setLocalDescription(answer);
-                    socket.emit('signal', { to: selectedPeerId, signal: { sdp: answer } });
+                    socket.emit('signal', { to: activePeer, signal: { sdp: answer } });
                 }
             } else if (signal.candidate) {
-                try { await pc.addIceCandidate(new RTCIceCandidate(signal.candidate)); } catch(e){}
+                pc.addIceCandidate(new RTCIceCandidate(signal.candidate)).catch(e => {});
             }
         });
 
-        function setupChannelEvents(channel) {
-            dataChannel = channel;
-            channel.binaryType = 'arraybuffer';
+        function handleChannel(channel) {
+            dc = channel;
+            dc.binaryType = 'arraybuffer';
             
-            channel.onopen = () => {
-                if (fileInput.files[0]) transferOut(fileInput.files[0]);
+            dc.onopen = () => {
+                if (fileInput.files[0]) sendFile(fileInput.files[0]);
             };
 
-            channel.onmessage = (e) => {
-                receivedChunks.push(e.data);
-                const currentSize = receivedChunks.reduce((acc, c) => acc + c.byteLength, 0);
-                updateUI(currentSize, incomingMetadata.size, "RECEIVING");
-                if (currentSize >= incomingMetadata.size) completeBeam();
+            dc.onmessage = (e) => {
+                chunks.push(e.data);
+                const received = chunks.reduce((a, b) => a + b.byteLength, 0);
+                updateUI(received, meta.size, "RECEIVING");
+                if (received >= meta.size) finalizeBeam();
             };
         }
 
-        async function transferOut(file) {
-            updateUI(0, file.size, "BEAMING");
+        async function sendFile(file) {
+            updateUI(0, file.size, "SENDING");
             const reader = file.stream().getReader();
-            let sent = 0;
+            let offset = 0;
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
-                
-                // Wait if buffer is full
-                while (dataChannel.bufferedAmount > 1024 * 1024) {
-                    await new Promise(r => setTimeout(r, 30));
-                }
-                
-                dataChannel.send(value);
-                sent += value.byteLength;
-                updateUI(sent, file.size, "BEAMING");
+                while (dc.bufferedAmount > 1024 * 1024) await new Promise(r => setTimeout(r, 20));
+                dc.send(value);
+                offset += value.byteLength;
+                updateUI(offset, file.size, "SENDING");
             }
-            setTimeout(resetView, 1500);
+            setTimeout(() => {
+                document.getElementById('transfer-overlay').classList.add('hidden');
+                document.getElementById('status-text').innerText = "ONLINE";
+            }, 1000);
         }
 
-        function updateUI(current, total, label) {
+        function updateUI(curr, total, label) {
             const overlay = document.getElementById('transfer-overlay');
             overlay.classList.remove('hidden');
             overlay.classList.add('flex');
             
-            const percent = Math.floor((current / total) * 100);
+            const p = Math.floor((curr / total) * 100);
             document.getElementById('transfer-title').innerText = label;
-            document.getElementById('transfer-file-name').innerText = incomingMetadata?.name || "unidentified_stream";
-            document.getElementById('transfer-file-info').innerText = `${(total/1024/1024).toFixed(2)} MB • ${incomingMetadata?.type || 'BINARY'}`;
-            document.getElementById('transfer-progress').style.width = `${percent}%`;
-            document.getElementById('transfer-percent').innerText = `${percent}%`;
+            document.getElementById('transfer-file-name').innerText = meta?.name || "STREAMING...";
+            document.getElementById('transfer-progress').style.width = `${p}%`;
+            document.getElementById('transfer-percent').innerText = `${p}%`;
+            document.getElementById('transfer-speed').innerText = `${(curr/1024/1024).toFixed(1)}MB / ${(total/1024/1024).toFixed(1)}MB`;
         }
 
-        function completeBeam() {
-            finalBlob = new Blob(receivedChunks, { type: incomingMetadata.type || 'application/octet-stream' });
+        function finalizeBeam() {
+            const blob = new Blob(chunks, { type: meta.type || 'application/octet-stream' });
+            const url = URL.createObjectURL(blob);
             
-            document.getElementById('transfer-title').innerText = "BEAM SUCCESSFUL";
-            document.getElementById('progress-container').classList.add('hidden');
-            document.getElementById('action-container').classList.remove('hidden');
-            document.getElementById('action-container').classList.add('flex');
+            document.getElementById('transfer-title').innerText = "BEAM RECEIVED";
+            document.getElementById('progress-area').classList.add('hidden');
+            document.getElementById('action-area').classList.remove('hidden');
 
-            if (incomingMetadata.type && incomingMetadata.type.startsWith('image/')) {
-                const url = URL.createObjectURL(finalBlob);
+            if (meta.type?.startsWith('image/')) {
                 const container = document.getElementById('image-preview-container');
-                container.innerHTML = `<img src="${url}" alt="preview">`;
+                container.innerHTML = `<img src="${url}" alt="beam">`;
                 container.classList.remove('hidden');
             }
 
-            // Fixed Download Logic
-            document.getElementById('download-btn').onclick = () => {
-                if (!finalBlob) return;
-                const url = URL.createObjectURL(finalBlob);
+            // CRITICAL FIX: The download button logic
+            const dBtn = document.getElementById('download-btn');
+            dBtn.onclick = () => {
                 const a = document.createElement('a');
-                a.style.display = 'none';
                 a.href = url;
-                a.download = incomingMetadata.name || 'downloaded_file';
+                a.download = meta.name;
                 document.body.appendChild(a);
                 a.click();
-                setTimeout(() => {
-                    document.body.removeChild(a);
-                    window.URL.revokeObjectURL(url);
-                }, 100);
+                setTimeout(() => document.body.removeChild(a), 100);
             };
         }
 
-        function resetView() {
-            document.getElementById('transfer-overlay').classList.replace('flex', 'hidden');
-            document.getElementById('image-preview-container').classList.add('hidden');
-            document.getElementById('image-preview-container').innerHTML = '';
-            document.getElementById('progress-container').classList.remove('hidden');
-            document.getElementById('action-container').classList.add('hidden');
-            document.getElementById('transfer-progress').style.width = '0%';
-            displayName.innerText = myName;
-            fileInput.value = '';
-            finalBlob = null;
-            receivedChunks = [];
-        }
-
-        document.getElementById('close-transfer').onclick = resetView;
+        document.getElementById('close-transfer').onclick = () => location.reload();
         document.getElementById('change-name-btn').onclick = () => {
-            const n = prompt("NODE IDENT:", myName);
-            if (n) { myName = n.toUpperCase().substring(0, 15); localStorage.setItem('beamdrop_name', myName); location.reload(); }
+            const n = prompt("NEW IDENT:", myName);
+            if(n) { localStorage.setItem('bd_name', n.toUpperCase()); location.reload(); }
         };
     </script>
 </body>
